@@ -1,0 +1,43 @@
+# CMake build directories (covers your debug/release presets)
+/build/
+/build-*/
+/cmake-build-*/
+
+# Personal CMake presets
+/CMakeUserPresets.json
+
+# Generated compilation database
+/compile_commands.json
+
+# Compiled objects and libraries
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Executables and debug symbols
+*.exe
+*.pdb
+*.dSYM/
+
+# Coverage and profiling output
+*.gcda
+*.gcno
+*.gcov
+*.profraw
+*.profdata
+
+# Editor temporary files
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+
