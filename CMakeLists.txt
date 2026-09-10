@@ -4,6 +4,10 @@ project(projectile_system LANGUAGES CXX)
 
 add_executable(projectile_system src/main.cpp)
 
+target_include_directories(projectile_system PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+)
+
 target_compile_features(projectile_system PRIVATE cxx_std_23)
 
-target_compile_options(projectile_system PRIVATE -Wall -Wextra -Wpendantic)
+target_compile_options(projectile_system PRIVATE -Wall -Wextra -Wpedantic)

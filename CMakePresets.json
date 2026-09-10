@@ -24,7 +24,7 @@
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/release",
       "cacheVariables": {
-        "CMAKE_BUID_TYPE": "Release",
+        "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_C_COMPILER": "clang",
         "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_EXPORT_COMPILE_COMMANDS": true
