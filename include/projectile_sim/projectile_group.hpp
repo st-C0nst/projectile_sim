@@ -46,12 +46,14 @@ using Projectiles = std::vector<BaseProjectile<Vec3>>;
 
 // Utils
 
+template <ProjectileVector ToVec, ProjectileVector FromVec>
 [[nodiscard]]
-inline DoubleProjectile make_double_projectile(const Projectile &p) {
+BaseProjectile<ToVec> projectile_cast(const BaseProjectile<FromVec> &p) {
+  using ToScalar = typename ToVec::value_type;
   return {
-      .position = glm::dvec3(p.position),
-      .velocity = glm::dvec3(p.velocity),
-      .lifetime = static_cast<double>(p.lifetime),
+      .position = ToVec(p.position),
+      .velocity = ToVec(p.velocity),
+      .lifetime = static_cast<ToScalar>(p.lifetime),
       .type = p.type,
   };
 }

@@ -44,7 +44,7 @@ public:
   }
   void tick(const ScalarType dt) { update_projectiles(dt); }
   [[nodiscard]]
-  std::span<const pdef::BaseProjectile<Vec3>> projectiles() {
+  std::span<const pdef::BaseProjectile<Vec3>> projectiles() const {
     return {projectiles_.data(), projectiles_.size()};
   }
 

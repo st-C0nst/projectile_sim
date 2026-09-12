@@ -1,6 +1,7 @@
 #include "projectile_sim/projectile_group.hpp"
 #include "projectile_sim/simulation.hpp"
 #include <chrono>
+#include <concepts>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -36,13 +37,13 @@ typename Vec3::value_type distance(const Vec3 &actual, const Vec3 &expected) {
   return glm::length(actual - expected);
 }
 template <typename Scalar>
-  requires std::is_scalar_v<Scalar>
+  requires std::floating_point<Scalar>
 Scalar distance(const Scalar &actual, const Scalar &expected) {
   return std::abs(static_cast<double>(actual) - static_cast<double>(expected));
 }
 
 template <typename Scalar>
-  requires std::is_scalar_v<Scalar>
+  requires std::floating_point<Scalar>
 Scalar length(Scalar s) {
   return std::abs(s);
 }
@@ -52,7 +53,7 @@ template <pdef::ProjectileVector Vec3> Vec3::value_type length(Vec3 v) {
 }
 
 template <typename T>
-  requires pdef::ProjectileVector<T> || std::is_scalar_v<T>
+  requires pdef::ProjectileVector<T> || std::floating_point<T>
 bool approximately_equal(
     const T &actual, const T &expected,
     decltype(distance(actual, expected)) absolute_tolerance,
@@ -78,21 +79,20 @@ template <pdef::ProjectileVector Vec3>
 [[nodiscard]]
 pdef::Projectiles<Vec3>
 make_random_projectiles(const std::size_t projectile_count,
-                        const float sim_seconds, const std::uint32_t seed) {
-  constexpr float max_velocity = 10.0f;
-  constexpr float max_position = 30.0f;
+                        const typename Vec3::value_type sim_seconds,
+                        const std::uint32_t seed) {
+  using Scalar = typename Vec3::value_type;
+
   std::mt19937 gen(seed);
-  std::uniform_real_distribution velocity_distro(-max_velocity, max_velocity);
-  std::uniform_real_distribution position_distro(-max_position, max_position);
+  std::uniform_real_distribution velocity_distro(Scalar{-10}, Scalar{10});
+  std::uniform_real_distribution position_distro(Scalar{-30}, Scalar{30});
 
   pdef::Projectiles<Vec3> projectiles;
   projectiles.reserve(projectile_count);
   for (std::size_t i = 0; i < projectile_count; ++i) {
     projectiles.emplace_back(
-        glm::vec3(position_distro(gen), position_distro(gen),
-                  position_distro(gen)),
-        glm::vec3(velocity_distro(gen), velocity_distro(gen),
-                  velocity_distro(gen)),
+        Vec3{position_distro(gen), position_distro(gen), position_distro(gen)},
+        Vec3{velocity_distro(gen), velocity_distro(gen), velocity_distro(gen)},
         sim_seconds + 10.0f, 0);
   }
   return projectiles;
@@ -100,7 +100,7 @@ make_random_projectiles(const std::size_t projectile_count,
 
 template <typename Vec3>
 double tick_engine(psim::ProjectileEngine<Vec3> &engine, const int num_ticks,
-                   const float dt) {
+                   const typename Vec3::value_type dt) {
 
   const auto start = Clock::now();
 
@@ -112,15 +112,27 @@ double tick_engine(psim::ProjectileEngine<Vec3> &engine, const int num_ticks,
 
   return std::chrono::duration<double, std::milli>(end - start).count();
 }
+
 template <typename T>
-  requires std::is_scalar_v<T>
+  requires std::floating_point<T>
 struct Tolerance {
   T abs_position_tolerance = 0.001f;
   T rel_position_tolerance = 0.0001f;
   T abs_velocity_tolerance = 0.001f;
   T rel_velocity_tolerance = 0.0001f;
   T abs_lifetime_tolerance = 0.001f;
-  T rel_lifetime_tolerance = 0.001f;
+  T rel_lifetime_tolerance = 0.0001f;
+};
+
+template <typename T = double>
+  requires std::floating_point<T>
+struct RunConfig {
+  int tick_rate;
+  int sim_seconds;
+  int num_ticks;
+  T dt;
+  std::uint32_t seed;
+  std::size_t projectile_count;
 };
 
 // TODO for benchmarks, maybe a config run struct: struct RunConfig {};
@@ -132,9 +144,9 @@ valid_projectile(const pdef::BaseProjectile<Vec3> &final_projectile,
                  const Tolerance<double> &tolerances,
                  const glm::dvec3 &acceleration, const double total_time) {
 
-  pdef::DoubleProjectile expected_projectile =
-      pdef::update_balistic(pdef::make_double_projectile(initial_projectile),
-                            acceleration, total_time);
+  pdef::DoubleProjectile expected_projectile = pdef::update_balistic(
+      pdef::projectile_cast<glm::dvec3>(initial_projectile), acceleration,
+      total_time);
 
   std::vector<std::string> results{};
 
@@ -171,9 +183,11 @@ valid_projectile(const pdef::BaseProjectile<Vec3> &final_projectile,
   return results;
 }
 
+template <pdef::ProjectileVector Vec3>
+[[nodiscard]]
 std::vector<std::vector<std::string>> has_correct_state(
-    std::span<const pdef::BaseProjectile<glm::vec3>> initial_projectiles,
-    std::span<const pdef::BaseProjectile<glm::vec3>> final_projectiles,
+    std::span<const pdef::BaseProjectile<Vec3>> initial_projectiles,
+    std::span<const pdef::BaseProjectile<Vec3>> final_projectiles,
     Tolerance<double> tolerances, const glm::dvec3 &gravity,
     const double time) {
 
@@ -188,32 +202,49 @@ std::vector<std::vector<std::string>> has_correct_state(
   return results;
 }
 
-int main() {
+template <typename Scalar>
+  requires std::floating_point<Scalar>
+constexpr RunConfig<Scalar> default_config() {
+
   constexpr int tick_rate = 60;
   constexpr int sim_seconds = 60;
   constexpr int num_ticks = sim_seconds * tick_rate;
-  constexpr float dt = 1.0f / tick_rate;
-  constexpr std::uint32_t seed = 5000;
-  constexpr std::size_t projectile_count = 100000;
+  constexpr Scalar dt = Scalar{1.0} / static_cast<Scalar>(tick_rate);
+
+  return {
+      .tick_rate = tick_rate,
+      .sim_seconds = sim_seconds,
+      .num_ticks = num_ticks,
+      .dt = dt,
+      .seed = 5000,
+      .projectile_count = 100000,
+  };
+}
+
+int main() {
+  using Vec3 = glm::vec3;
+  using Scalar = typename Vec3::value_type;
+
+  constexpr auto run_config = default_config<Scalar>();
   constexpr Tolerance<double> tolerances{};
 
-  pdef::Projectiles<glm::vec3> projectiles =
-      make_random_projectiles<glm::vec3>(projectile_count, sim_seconds, seed);
+  pdef::Projectiles<Vec3> projectiles = make_random_projectiles<Vec3>(
+      run_config.projectile_count, run_config.sim_seconds, run_config.seed);
 
-  psim::ProjectileEngine<glm::vec3> engine(projectiles);
-  auto elapsed_ms = tick_engine(engine, num_ticks, dt);
+  psim::ProjectileEngine<Vec3> engine(projectiles);
+  auto elapsed_ms = tick_engine(engine, run_config.num_ticks, run_config.dt);
 
   std::println("Time elapsed in test: {} ms", elapsed_ms);
 
   std::println("Total: {:.3f} ms | Average tick: {:.3f} us", elapsed_ms,
-               elapsed_ms * 1000.0 / num_ticks);
+               elapsed_ms * 1000.0 / run_config.num_ticks);
 
   const glm::dvec3 acceleration{0.0, -engine.gravity(), 0.0};
-  constexpr double total_time =
-      static_cast<double>(num_ticks) * static_cast<double>(dt);
+  constexpr double total_time = static_cast<double>(run_config.num_ticks) *
+                                static_cast<double>(run_config.dt);
 
-  auto results = has_correct_state(projectiles, engine.projectiles(),
-                                   tolerances, acceleration, total_time);
+  auto results = has_correct_state<Vec3>(projectiles, engine.projectiles(),
+                                         tolerances, acceleration, total_time);
   for (const auto &projectile_errors : results) {
     if (projectile_errors.empty()) {
       continue;
