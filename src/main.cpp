@@ -183,9 +183,15 @@ valid_projectile(const pdef::BaseProjectile<Vec3> &final_projectile,
   return results;
 }
 
+// add formatting for this
+struct ValidationResult {
+  std::size_t error_count{0};
+  std::vector<std::vector<std::string>> projectile_errors;
+};
+
 template <pdef::ProjectileVector Vec3>
 [[nodiscard]]
-std::vector<std::vector<std::string>> has_correct_state(
+ValidationResult has_correct_state(
     std::span<const pdef::BaseProjectile<Vec3>> initial_projectiles,
     std::span<const pdef::BaseProjectile<Vec3>> final_projectiles,
     Tolerance<double> tolerances, const glm::dvec3 &gravity,
@@ -194,12 +200,17 @@ std::vector<std::vector<std::string>> has_correct_state(
   std::vector<std::vector<std::string>> results;
   results.reserve(initial_projectiles.size());
 
+  std::size_t err_count = 0;
   for (const auto &[final_projectile, initial_projectile] :
        std::views::zip(final_projectiles, initial_projectiles)) {
-    results.emplace_back(valid_projectile(final_projectile, initial_projectile,
-                                          tolerances, gravity, time));
+    auto res = valid_projectile(final_projectile, initial_projectile,
+                                tolerances, gravity, time);
+    if (!res.empty()) {
+      ++err_count;
+    }
+    results.emplace_back(res);
   }
-  return results;
+  return {.error_count = err_count, .projectile_errors = results};
 }
 
 template <typename Scalar>
@@ -243,9 +254,10 @@ int main() {
   constexpr double total_time = static_cast<double>(run_config.num_ticks) *
                                 static_cast<double>(run_config.dt);
 
-  auto results = has_correct_state<Vec3>(projectiles, engine.projectiles(),
-                                         tolerances, acceleration, total_time);
-  for (const auto &projectile_errors : results) {
+  auto result = has_correct_state<Vec3>(projectiles, engine.projectiles(),
+                                        tolerances, acceleration, total_time);
+  // std::println("{}", result);
+  for (const auto &projectile_errors : result.projectile_errors) {
     if (projectile_errors.empty()) {
       continue;
     }
@@ -255,5 +267,9 @@ int main() {
     }
   }
 
-  return 0;
+  if (result.error_count > 0) {
+    return EXIT_FAILURE;
+  }
+
+  return EXIT_SUCCESS;
 }
