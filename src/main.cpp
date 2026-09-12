@@ -4,138 +4,103 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <glm/ext/vector_double3.hpp>
+#include <glm/ext/vector_float3.hpp>
 #include <glm/geometric.hpp>
+#include <numbers>
 #include <print>
 #include <random>
 #include <ranges>
 #include <span>
-#include <tuple>
+#include <type_traits>
 
 using Clock = std::chrono::steady_clock;
 
-void print_projectiles(std::span<const Projectile> projectile_view) {
+// TODO find way to print out vec in an easy manner, can prob fold expression
+// it?
+
+// TODO should prob seperate tests which measure accuracy vs tests which measure
+// performance
+//
+// TODO use doubles for validation. also allow template for projectile type to
+// use diff vectors
+//
+// TOOD mult accuracy runs and vary the tick rate. sees if accuracy depends on
+// frame rate. for every run record largest error across projectiles
+//
+// TODO test where we hold 60hz and try different durations, shows how error
+// develops over longer simulations.
+//
+template <pdef::ProjectileVector Vec3>
+typename Vec3::value_type distance(const Vec3 &actual, const Vec3 &expected) {
+  return glm::length(actual - expected);
+}
+template <typename Scalar>
+  requires std::is_scalar_v<Scalar>
+Scalar distance(const Scalar &actual, const Scalar &expected) {
+  return std::abs(static_cast<double>(actual) - static_cast<double>(expected));
+}
+
+template <typename Scalar>
+  requires std::is_scalar_v<Scalar>
+Scalar length(Scalar s) {
+  return s;
+}
+
+template <pdef::ProjectileVector Vec3> Vec3 length(Vec3 v) {
+  return glm::length(v);
+}
+
+template <typename T>
+  requires pdef::ProjectileVector<T> || std::is_scalar_v<T>
+bool approximately_equal(
+    const T &actual, const T &expected,
+    decltype(distance(actual, expected)) absolute_tolerance,
+    decltype(distance(actual, expected)) relative_tolerance) {
+  using ToleranceType = decltype(distance(actual, expected));
+  const ToleranceType error = distance(actual, expected);
+  const ToleranceType allowed_error =
+      absolute_tolerance + relative_tolerance * length(expected);
+
+  return error <= allowed_error;
+}
+
+template <pdef::ProjectileVector Vec3>
+void print_projectiles(
+    std::span<const pdef::BaseProjectile<Vec3>> projectile_view) {
   for (const auto &projectile : projectile_view) {
 
     std::println("{}", projectile);
   }
 }
 
+template <pdef::ProjectileVector Vec3>
 [[nodiscard]]
-inline Vec3 position(Vec3 initial_position, Vec3 initial_velocity,
-                     Vec3 acceleration, float time) {
-  return initial_position + initial_velocity * time +
-         0.5f * acceleration * time * time;
-}
-
-[[nodiscard]]
-inline Vec3 velocity(Vec3 initial_velocity, Vec3 acceleration, float time) {
-  return initial_velocity + acceleration * time;
-}
-
-[[nodiscard]]
-inline Projectile make_expected_projectile(Projectile initial_projectile,
-                                           Vec3 acceleration, float time) {
-  float expected_lifetime = initial_projectile.lifetime - time;
-  Vec3 expected_position =
-      position(initial_projectile.position, initial_projectile.velocity,
-               acceleration, time);
-  Vec3 expected_velocity =
-      velocity(initial_projectile.velocity, acceleration, time);
-  return {
-      .position = expected_position,
-      .velocity = expected_velocity,
-      .lifetime = expected_lifetime,
-      .type = initial_projectile.type,
-  };
-}
-
-[[nodiscard]]
-std::tuple<Vec3, Vec3, float, bool>
-make_projectile_state_deviation(Projectile final_projectile,
-                                Projectile initial_projectile,
-                                Vec3 acceleration, float time) {
-  Projectile expected_projectile =
-      make_expected_projectile(initial_projectile, acceleration, time);
-  return {
-      final_projectile.position - expected_projectile.position,
-      final_projectile.velocity - expected_projectile.velocity,
-      final_projectile.lifetime - expected_projectile.lifetime,
-      final_projectile.type == expected_projectile.type,
-  };
-}
-// TODO set up way to validate between runs performance relative to other runs
-
-// TODO add units if not obvious
-[[nodiscard]]
-std::tuple<bool, bool, bool, bool> // TODO make this api better, for now we just
-                                   // validate every field
-is_projectile_valid(Projectile final_projectile, Projectile initial_projectile,
-                    Vec3 acceleration, float time, float position_tolerance,
-                    float velocity_tolerance, float lifetime_tolerance) {
-  const auto &[position_dev, velocity_dev, lifetime_dev, type_match] =
-      make_projectile_state_deviation(final_projectile, initial_projectile,
-                                      acceleration, time);
-  return {
-      glm::length(position_dev) <= position_tolerance,
-      glm::length(velocity_dev) <= velocity_tolerance,
-      std::abs(lifetime_dev) <= lifetime_tolerance,
-      type_match,
-  };
-}
-
-Projectiles make_random_projectiles(const std::size_t projectile_count,
-                                    const float sim_seconds,
-                                    const std::uint32_t seed) {
+pdef::Projectiles<Vec3>
+make_random_projectiles(const std::size_t projectile_count,
+                        const float sim_seconds, const std::uint32_t seed) {
   constexpr float max_velocity = 10.0f;
   constexpr float max_position = 30.0f;
   std::mt19937 gen(seed);
   std::uniform_real_distribution velocity_distro(-max_velocity, max_velocity);
   std::uniform_real_distribution position_distro(-max_position, max_position);
 
-  Projectiles projectiles;
+  pdef::Projectiles<Vec3> projectiles;
   projectiles.reserve(projectile_count);
   for (std::size_t i = 0; i < projectile_count; ++i) {
     projectiles.emplace_back(
-        Vec3(position_distro(gen), position_distro(gen), position_distro(gen)),
-        Vec3(velocity_distro(gen), velocity_distro(gen), velocity_distro(gen)),
+        glm::vec3(position_distro(gen), position_distro(gen),
+                  position_distro(gen)),
+        glm::vec3(velocity_distro(gen), velocity_distro(gen),
+                  velocity_distro(gen)),
         sim_seconds + 10.0f, 0);
   }
   return projectiles;
 }
 
-constexpr double make_checksum(std::span<const Projectile> projectiles) {
-  double checksum = 0.0;
-
-  for (const auto &projectile : projectiles) {
-    checksum += static_cast<double>(projectile.position.x) +
-                static_cast<double>(projectile.position.y) +
-                static_cast<double>(projectile.position.z);
-  }
-  return checksum;
-}
-
-template <typename... Ts> bool all_true(const std::tuple<Ts...> &values) {
-  return std::apply(
-      [](const auto &...xs) { return (static_cast<bool>(xs) && ...); }, values);
-}
-
-int main() {
-
-  constexpr int tick_rate = 60;
-  constexpr int sim_seconds = 60;
-  constexpr int num_ticks = sim_seconds * tick_rate;
-  constexpr float dt = 1.0f / tick_rate;
-  constexpr std::uint32_t seed = 5000;
-  constexpr std::size_t projectile_count = 100000;
-  constexpr float position_tolerance = 0.0001;
-  constexpr float velocity_tolerance = 0.0001;
-  constexpr float lifetime_tolerance = 0.0001;
-
-  Projectiles projectiles =
-      make_random_projectiles(projectile_count, sim_seconds, seed);
-  double prerun_checksum = make_checksum(projectiles);
-  std::println("Prerun checksum: {}", prerun_checksum);
-  psim::ProjectileEngine engine(projectiles);
+template <typename Vec3>
+double tick_engine(psim::ProjectileEngine<Vec3> &engine, const int num_ticks,
+                   const float dt) {
 
   const auto start = Clock::now();
 
@@ -144,37 +109,74 @@ int main() {
   }
 
   const auto end = Clock::now();
-  const double elapsed_ms =
-      std::chrono::duration<double, std::milli>(end - start).count();
+
+  return std::chrono::duration<double, std::milli>(end - start).count();
+}
+
+int main() {
+  constexpr int tick_rate = 60;
+  constexpr int sim_seconds = 60;
+  constexpr int num_ticks = sim_seconds * tick_rate;
+  constexpr float dt = 1.0f / tick_rate;
+  constexpr std::uint32_t seed = 5000;
+  constexpr std::size_t projectile_count = 100000;
+  constexpr double abs_position_tolerance = 0.001f;
+  constexpr double rel_position_tolerance = 0.0001f;
+  constexpr double abs_velocity_tolerance = 0.001f;
+  constexpr double rel_velocity_tolerance = 0.0001f;
+  constexpr double abs_lifetime_tolerance = 0.001f;
+  constexpr double rel_lifetime_tolerance = 0.001f;
+
+  pdef::Projectiles<glm::vec3> projectiles =
+      make_random_projectiles<glm::vec3>(projectile_count, sim_seconds, seed);
+
+  psim::ProjectileEngine<glm::vec3> engine(projectiles);
+  auto elapsed_ms = tick_engine(engine, num_ticks, dt);
 
   std::println("Time elapsed in test: {} ms", elapsed_ms);
-  double postrun_checksum = make_checksum(engine.projectiles());
-  std::println("Final state checksum: {}", postrun_checksum);
 
-  // TODO better alternative is to calc endstates after dt time steps and then
-  // validate final state with some degree of tolerance
-  std::println("Prerun to postrun checksum comparisons: {}",
-               prerun_checksum != postrun_checksum);
   std::println("Total: {:.3f} ms | Average tick: {:.3f} us", elapsed_ms,
                elapsed_ms * 1000.0 / num_ticks);
-  std::vector<std::tuple<bool, bool, bool, bool, Projectile, Projectile>>
-      invalid_projectiles;
 
-  const Vec3 acceleration{0.0f, -engine.gravity(), 0.0f};
-  const float total_time = num_ticks * dt;
+  const glm::dvec3 acceleration{0.0, -engine.gravity(), 0.0};
+  constexpr double total_time =
+      static_cast<double>(num_ticks) * static_cast<double>(dt);
 
   for (const auto &[final_projectile, initial_projectile] :
        std::views::zip(engine.projectiles(), projectiles)) {
 
-    const auto [position_ok, velocity_ok, lifetime_ok, type_ok] =
-        is_projectile_valid(final_projectile, initial_projectile, acceleration,
-                            total_time, position_tolerance, velocity_tolerance,
-                            lifetime_tolerance);
+    pdef::DoubleProjectile expected_projectile =
+        pdef::update_balistic(pdef::make_double_projectile(initial_projectile),
+                              acceleration, total_time);
 
-    if (!(position_ok && velocity_ok && lifetime_ok && type_ok)) {
-      invalid_projectiles.emplace_back(position_ok, velocity_ok, lifetime_ok,
-                                       type_ok, final_projectile,
-                                       initial_projectile);
+    // TODO should really collect these errors as formatted strings, need to tie
+    // error to projectile with an id or something
+    if (!approximately_equal(glm::dvec3(final_projectile.position),
+                             expected_projectile.position,
+                             abs_position_tolerance, rel_position_tolerance)) {
+      std::println(
+          "final position is not within toleranace. Final: {}, Expected: {}",
+          final_projectile.position, expected_projectile.position);
+    }
+
+    if (!approximately_equal(glm::dvec3(final_projectile.velocity),
+                             expected_projectile.velocity,
+                             abs_velocity_tolerance, rel_velocity_tolerance)) {
+      std::println(
+          "final velocity is not within tolerance. Final: {}, Expected: {}",
+          final_projectile.velocity, expected_projectile.velocity);
+    }
+    if (!approximately_equal(static_cast<double>(final_projectile.lifetime),
+                             expected_projectile.lifetime,
+                             abs_lifetime_tolerance, rel_lifetime_tolerance)) {
+      std::println(
+          "final lifetime is not within tolerance. Final: {}, Expected: {}",
+          final_projectile.lifetime, expected_projectile.lifetime);
+    }
+    if (final_projectile.type != expected_projectile.type) {
+      std::println(
+          "final type does not match expected type. Final {}, Expected: {}",
+          final_projectile.type, expected_projectile.type);
     }
   }
 

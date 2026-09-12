@@ -6,66 +6,54 @@
 
 /* TODO */
 // membership in vector should imply if its alive, batch cleanup
-// operation
+// operation. method to pawn new projectiles
 
 namespace psim {
-inline constexpr float default_gravity = 9.81f;
+inline constexpr double default_gravity = 9.81;
 
-using Vec3 = glm::vec3;
-
-inline Projectile update_balistic(const Projectile &projectile, float gravity,
-                                  float dt) {
-
-  Vec3 new_position = Vec3(0, -0.5 * gravity * dt * dt, 0) +
-                      projectile.velocity * dt + projectile.position;
-  Vec3 new_velocity = Vec3(0, -1 * gravity * dt, 0) + projectile.velocity;
-  return Projectile{
-      .position = new_position,
-      .velocity = new_velocity,
-      .lifetime = projectile.lifetime - dt,
-      .type = projectile.type,
-  };
-}
-
-class ProjectileEngine {
+template <pdef::ProjectileVector Vec3> class ProjectileEngine {
 public:
-  // Must initialize data
+  using ScalarType = typename Vec3::value_type;
+  // TODO create projectile default
   ProjectileEngine() = delete;
 
-  explicit ProjectileEngine(Projectiles &projectiles,
-                            const float gravity = default_gravity)
+  explicit ProjectileEngine(
+      pdef::Projectiles<Vec3> &projectiles,
+      const ScalarType gravity = static_cast<ScalarType>(default_gravity))
       : projectiles_(projectiles), gravity_(gravity) {};
 
   explicit ProjectileEngine(ProjectileEngine &&other) noexcept = default;
   ProjectileEngine &operator=(ProjectileEngine &&other) noexcept = default;
 
   // No copying
+  // TODO, is this a necessary restriction?
   ProjectileEngine(const ProjectileEngine &) = delete;
   ProjectileEngine operator=(const ProjectileEngine &) = delete;
 
-  void update_projectiles(float dt) {
+  void update_projectiles(const ScalarType dt) {
     for (auto &projectile : projectiles_) {
       if (projectile.lifetime <= 0) {
         continue;
       }
 
-      projectile = update_balistic(projectile, gravity_, dt);
+      projectile = pdef::update_balistic(
+          projectile, Vec3{0, ScalarType{-1} * gravity_, 0}, dt);
     }
   }
-  void tick(float dt) { update_projectiles(dt); }
+  void tick(const ScalarType dt) { update_projectiles(dt); }
   [[nodiscard]]
-  std::span<const Projectile> projectiles() {
+  std::span<const pdef::BaseProjectile<Vec3>> projectiles() {
     return {projectiles_.data(), projectiles_.size()};
   }
 
   [[nodiscard]]
-  float gravity() const noexcept {
+  ScalarType gravity() const noexcept {
     return gravity_;
   }
 
 private:
-  Projectiles projectiles_;
-  float gravity_ = default_gravity;
+  pdef::Projectiles<Vec3> projectiles_;
+  ScalarType gravity_ = default_gravity;
 };
 
 } // namespace psim
