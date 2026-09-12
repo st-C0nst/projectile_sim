@@ -14,6 +14,8 @@ inline constexpr double default_gravity = 9.81;
 template <pdef::ProjectileVector Vec3> class ProjectileEngine {
 public:
   using ScalarType = typename Vec3::value_type;
+  using VectorType = Vec3;
+
   // TODO create projectile default
   ProjectileEngine() = delete;
 

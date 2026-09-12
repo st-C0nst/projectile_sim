@@ -44,10 +44,10 @@ Scalar distance(const Scalar &actual, const Scalar &expected) {
 template <typename Scalar>
   requires std::is_scalar_v<Scalar>
 Scalar length(Scalar s) {
-  return s;
+  return std::abs(s);
 }
 
-template <pdef::ProjectileVector Vec3> Vec3 length(Vec3 v) {
+template <pdef::ProjectileVector Vec3> Vec3::value_type length(Vec3 v) {
   return glm::length(v);
 }
 
@@ -112,6 +112,81 @@ double tick_engine(psim::ProjectileEngine<Vec3> &engine, const int num_ticks,
 
   return std::chrono::duration<double, std::milli>(end - start).count();
 }
+template <typename T>
+  requires std::is_scalar_v<T>
+struct Tolerance {
+  T abs_position_tolerance = 0.001f;
+  T rel_position_tolerance = 0.0001f;
+  T abs_velocity_tolerance = 0.001f;
+  T rel_velocity_tolerance = 0.0001f;
+  T abs_lifetime_tolerance = 0.001f;
+  T rel_lifetime_tolerance = 0.001f;
+};
+
+// TODO for benchmarks, maybe a config run struct: struct RunConfig {};
+
+template <pdef::ProjectileVector Vec3>
+std::vector<std::string>
+valid_projectile(const pdef::BaseProjectile<Vec3> &final_projectile,
+                 const pdef::BaseProjectile<Vec3> &initial_projectile,
+                 const Tolerance<double> &tolerances,
+                 const glm::dvec3 &acceleration, const double total_time) {
+
+  pdef::DoubleProjectile expected_projectile =
+      pdef::update_balistic(pdef::make_double_projectile(initial_projectile),
+                            acceleration, total_time);
+
+  std::vector<std::string> results{};
+
+  if (!approximately_equal(glm::dvec3(final_projectile.position),
+                           expected_projectile.position,
+                           tolerances.abs_position_tolerance,
+                           tolerances.rel_position_tolerance)) {
+    results.emplace_back(std::format(
+        "final position is not within toleranace. Final: {}, Expected: {}",
+        final_projectile.position, expected_projectile.position));
+  }
+
+  if (!approximately_equal(glm::dvec3(final_projectile.velocity),
+                           expected_projectile.velocity,
+                           tolerances.abs_velocity_tolerance,
+                           tolerances.rel_velocity_tolerance)) {
+    results.emplace_back(std::format(
+        "final velocity is not within tolerance. Final: {}, Expected: {}",
+        final_projectile.velocity, expected_projectile.velocity));
+  }
+  if (!approximately_equal(static_cast<double>(final_projectile.lifetime),
+                           expected_projectile.lifetime,
+                           tolerances.abs_lifetime_tolerance,
+                           tolerances.rel_lifetime_tolerance)) {
+    results.emplace_back(std::format(
+        "final lifetime is not within tolerance. Final: {}, Expected: {}",
+        final_projectile.lifetime, expected_projectile.lifetime));
+  }
+  if (final_projectile.type != expected_projectile.type) {
+    results.emplace_back(std::format(
+        "final type does not match expected type. Final {}, Expected: {}",
+        final_projectile.type, expected_projectile.type));
+  }
+  return results;
+}
+
+std::vector<std::vector<std::string>> has_correct_state(
+    std::span<const pdef::BaseProjectile<glm::vec3>> initial_projectiles,
+    std::span<const pdef::BaseProjectile<glm::vec3>> final_projectiles,
+    Tolerance<double> tolerances, const glm::dvec3 &gravity,
+    const double time) {
+
+  std::vector<std::vector<std::string>> results;
+  results.reserve(initial_projectiles.size());
+
+  for (const auto &[final_projectile, initial_projectile] :
+       std::views::zip(final_projectiles, initial_projectiles)) {
+    results.emplace_back(valid_projectile(final_projectile, initial_projectile,
+                                          tolerances, gravity, time));
+  }
+  return results;
+}
 
 int main() {
   constexpr int tick_rate = 60;
@@ -120,12 +195,7 @@ int main() {
   constexpr float dt = 1.0f / tick_rate;
   constexpr std::uint32_t seed = 5000;
   constexpr std::size_t projectile_count = 100000;
-  constexpr double abs_position_tolerance = 0.001f;
-  constexpr double rel_position_tolerance = 0.0001f;
-  constexpr double abs_velocity_tolerance = 0.001f;
-  constexpr double rel_velocity_tolerance = 0.0001f;
-  constexpr double abs_lifetime_tolerance = 0.001f;
-  constexpr double rel_lifetime_tolerance = 0.001f;
+  constexpr Tolerance<double> tolerances{};
 
   pdef::Projectiles<glm::vec3> projectiles =
       make_random_projectiles<glm::vec3>(projectile_count, sim_seconds, seed);
@@ -142,41 +212,15 @@ int main() {
   constexpr double total_time =
       static_cast<double>(num_ticks) * static_cast<double>(dt);
 
-  for (const auto &[final_projectile, initial_projectile] :
-       std::views::zip(engine.projectiles(), projectiles)) {
-
-    pdef::DoubleProjectile expected_projectile =
-        pdef::update_balistic(pdef::make_double_projectile(initial_projectile),
-                              acceleration, total_time);
-
-    // TODO should really collect these errors as formatted strings, need to tie
-    // error to projectile with an id or something
-    if (!approximately_equal(glm::dvec3(final_projectile.position),
-                             expected_projectile.position,
-                             abs_position_tolerance, rel_position_tolerance)) {
-      std::println(
-          "final position is not within toleranace. Final: {}, Expected: {}",
-          final_projectile.position, expected_projectile.position);
+  auto results = has_correct_state(projectiles, engine.projectiles(),
+                                   tolerances, acceleration, total_time);
+  for (const auto &projectile_errors : results) {
+    if (projectile_errors.empty()) {
+      continue;
     }
-
-    if (!approximately_equal(glm::dvec3(final_projectile.velocity),
-                             expected_projectile.velocity,
-                             abs_velocity_tolerance, rel_velocity_tolerance)) {
-      std::println(
-          "final velocity is not within tolerance. Final: {}, Expected: {}",
-          final_projectile.velocity, expected_projectile.velocity);
-    }
-    if (!approximately_equal(static_cast<double>(final_projectile.lifetime),
-                             expected_projectile.lifetime,
-                             abs_lifetime_tolerance, rel_lifetime_tolerance)) {
-      std::println(
-          "final lifetime is not within tolerance. Final: {}, Expected: {}",
-          final_projectile.lifetime, expected_projectile.lifetime);
-    }
-    if (final_projectile.type != expected_projectile.type) {
-      std::println(
-          "final type does not match expected type. Final {}, Expected: {}",
-          final_projectile.type, expected_projectile.type);
+    std::println("Invalid Projectile found");
+    for (const auto &err : projectile_errors) {
+      std::println("{}", err);
     }
   }
 
