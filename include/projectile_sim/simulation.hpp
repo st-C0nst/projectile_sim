@@ -16,7 +16,6 @@ public:
   using ScalarType = typename Vec3::value_type;
   using VectorType = Vec3;
 
-  // TODO create projectile default
   ProjectileEngine() = delete;
 
   explicit ProjectileEngine(
@@ -28,13 +27,9 @@ public:
   ProjectileEngine &operator=(ProjectileEngine &&other) noexcept = default;
 
   // No copying
-  // TODO, is this a necessary restriction?
   ProjectileEngine(const ProjectileEngine &) = delete;
   ProjectileEngine operator=(const ProjectileEngine &) = delete;
 
-  // For nonnegative dt, projectiles alive at tick start advance for the full
-  // tick, even if their lifetime ends partway through it. Expired entries are
-  // retained in their original order and remain unchanged on subsequent ticks.
   void update_projectiles(const ScalarType dt) {
     for (auto &projectile : projectiles_) {
       if (projectile.lifetime <= 0) {
