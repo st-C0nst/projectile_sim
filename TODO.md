@@ -15,10 +15,10 @@
 ## Benchmark baseline
 
 - [x] Add a shared CMake `INTERFACE` target for simulation includes and C++ requirements.
-- [ ] Add a Google Benchmark executable measuring whole engine ticks for 1,000, 10,000, and 100,000 projectiles in both precisions.
-- [ ] Keep generation, resetting, validation, and logging outside tick timing; measure those separately if needed.
-- [ ] Use fixed tick batches and reset between batches so projectiles do not expire during an all-active benchmark.
-- [ ] Use repetitions and appropriate optimization barriers, and record build configuration and workload with results.
+- [x] Add a Google Benchmark executable measuring whole engine ticks for 1,000, 10,000, and 100,000 projectiles in both precisions.
+- [x] Keep generation, resetting, validation, and logging outside tick timing; measure those separately if needed.
+- [x] Use fixed tick batches and reset between batches so projectiles do not expire during an all-active benchmark.
+- [x] Use repetitions and appropriate optimization barriers, and record build configuration and workload with results.
 
 ## Integration and profiling
 

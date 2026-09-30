@@ -1,7 +1,7 @@
 # Simulator correctness tests
 
 Requires CMake 3.25+, Ninja, GLM headers, and a C++23 compiler/library with
-`std::format` and `std::print` support (also required by the existing project).
+`std::format` support.
 Google Test is loaded from an installed CMake package if available; otherwise
 CMake downloads the pinned, SHA-256 verified v1.17.0 release on first configure.
 The integration uses [Google Test's CMake workflow](https://google.github.io/googletest/quickstart-cmake.html).
@@ -16,8 +16,10 @@ ctest --preset debug
 
 The `release` presets work the same way. Configure with `-DBUILD_TESTING=OFF`
 to build only the timing executable, without fetching Google Test.
-`projectile_system` now runs the timing workload from `benchmarks/main.cpp`;
-correctness failures are reported by `projectile_tests` and CTest with failing
+`projectile_system` runs the Google Benchmark workloads described in
+[the benchmark guide](../benchmarks/README.md). Configure with
+`-DBUILD_BENCHMARKS=OFF` to run correctness tests without fetching Google Benchmark.
+Correctness failures are reported by `projectile_tests` and CTest with failing
 exit codes.
 
 The suite runs deterministic cases for float and double vectors and randomized
