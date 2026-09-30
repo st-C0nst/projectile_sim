@@ -32,6 +32,9 @@ public:
   ProjectileEngine(const ProjectileEngine &) = delete;
   ProjectileEngine operator=(const ProjectileEngine &) = delete;
 
+  // For nonnegative dt, projectiles alive at tick start advance for the full
+  // tick, even if their lifetime ends partway through it. Expired entries are
+  // retained in their original order and remain unchanged on subsequent ticks.
   void update_projectiles(const ScalarType dt) {
     for (auto &projectile : projectiles_) {
       if (projectile.lifetime <= 0) {
