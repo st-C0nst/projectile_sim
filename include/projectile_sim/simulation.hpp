@@ -4,10 +4,6 @@
 #include <glm/vec3.hpp>
 #include <span>
 
-/* TODO */
-// membership in vector should imply if its alive, batch cleanup
-// operation. method to pawn new projectiles
-
 namespace psim {
 inline constexpr double default_gravity = 9.81;
 

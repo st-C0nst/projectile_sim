@@ -1,6 +1,5 @@
 #pragma once
 #include <concepts>
-#include <cstdint>
 #include <format>
 #include <glm/detail/qualifier.hpp>
 #include <glm/ext/vector_double3.hpp>
@@ -10,20 +9,10 @@
 #include <utility>
 #include <vector>
 
+// TODO Projectile Variants:
+// Balstic, Drag, Homing, Guided, Linear
+
 namespace pdef {
-
-using ProjectileId = std::uint16_t;
-
-/* TODO */
-// Should seperate vectors based on variants, then process each at same time
-// removes branching
-// Balstic, Drag, Homing, Linear, vector for each update functions for each
-
-enum class MotionModel : std::uint8_t { Balistic };
-
-struct ProjectileType {
-  float mass;
-};
 
 template <typename Vec3>
 concept ProjectileVector =
@@ -35,12 +24,12 @@ template <ProjectileVector Vec3 = glm::vec3> struct BaseProjectile {
   Vec3 position{0};
   Vec3 velocity{0};
   ScalarType lifetime{0};
-  ProjectileId type{0};
 };
 
 // Aliases
 using Projectile = BaseProjectile<>;
 using DoubleProjectile = BaseProjectile<glm::dvec3>;
+
 template <ProjectileVector Vec3>
 using Projectiles = std::vector<BaseProjectile<Vec3>>;
 
@@ -54,7 +43,6 @@ BaseProjectile<ToVec> projectile_cast(const BaseProjectile<FromVec> &p) {
       .position = ToVec(p.position),
       .velocity = ToVec(p.velocity),
       .lifetime = static_cast<ToScalar>(p.lifetime),
-      .type = p.type,
   };
 }
 
@@ -89,7 +77,6 @@ update_balistic(const BaseProjectile<Vec3> &projectile,
       .position = new_position,
       .velocity = new_velocity,
       .lifetime = projectile.lifetime - dt,
-      .type = projectile.type,
   };
 }
 } // namespace pdef
@@ -128,10 +115,9 @@ struct std::formatter<pdef::BaseProjectile<Vec3>>
               std::format_context &ctx) const {
     auto text = std::format("Projectile {{ pos {:.3f}, "
                             "vel {:.3f}, "
-                            "lifetime {:.3f}, "
-                            "type {}"
+                            "lifetime {:.3f}"
                             "}}",
-                            p.position, p.velocity, p.lifetime, p.type);
+                            p.position, p.velocity, p.lifetime);
     return std::formatter<std::string_view>::format(text, ctx);
   }
 };

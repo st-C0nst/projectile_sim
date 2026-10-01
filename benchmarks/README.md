@@ -47,7 +47,7 @@ updates, not batches. It reports both elapsed and CPU time using Google
 Benchmark's default single-thread CPU timing mode.
 
 Inputs use seed 5000, positions in [-30, 30], velocities in [-10, 10], lifetime
-70 seconds, and type 0. Random components are generated in double then cast to
+70 seconds. Random components are generated in double then cast to
 the workload precision. Inputs match across precisions on the same standard
 library; distribution implementations can differ between libraries. The
 engine uses default gravity and `Scalar(1) / Scalar(60)` as the timestep.

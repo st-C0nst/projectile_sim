@@ -28,8 +28,7 @@ void tick_benchmark(benchmark::State &state) {
                        {static_cast<Scalar>(velocity(generator)),
                         static_cast<Scalar>(velocity(generator)),
                         static_cast<Scalar>(velocity(generator))},
-                       Scalar{70},
-                       0});
+                       Scalar{70}});
   }
   psim::ProjectileEngine<Vec3> engine(initial);
   // One benchmark iteration is one engine tick, despite timing in batches.

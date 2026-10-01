@@ -3,7 +3,6 @@
 #include <cmath>
 #include <format>
 #include <gtest/gtest.h>
-#include <limits>
 #include <random>
 #include <string>
 #include <type_traits>
@@ -34,7 +33,6 @@ void expect_ballistic(const pdef::BaseProjectile<Vec> &actual,
   EXPECT_NEAR(double(actual.lifetime), lifetime,
               (lifetime_absolute < 0 ? absolute : lifetime_absolute) +
                   relative * std::abs(lifetime));
-  EXPECT_EQ(actual.type, initial.type);
 }
 
 template <pdef::ProjectileVector Vec>
@@ -45,21 +43,20 @@ void expect_same(const pdef::BaseProjectile<Vec> &actual,
     EXPECT_EQ(actual.velocity[axis], expected.velocity[axis]);
   }
   EXPECT_EQ(actual.lifetime, expected.lifetime);
-  EXPECT_EQ(actual.type, expected.type);
 }
 
 template <typename Vec> class ProjectileTest : public testing::Test {
 public:
   using Scalar = typename Vec::value_type;
   using Projectile = pdef::BaseProjectile<Vec>;
-  Projectile initial{{1, 2, 3}, {4, 5, 6}, 10, 42};
+  Projectile initial{{1, 2, 3}, {4, 5, 6}, 10};
 };
 using Precisions = testing::Types<glm::vec3, glm::dvec3>;
 TYPED_TEST_SUITE(ProjectileTest, Precisions);
 
 TYPED_TEST(ProjectileTest, DefaultStateIsZero) {
   expect_same(typename TestFixture::Projectile{},
-              typename TestFixture::Projectile{{0, 0, 0}, {0, 0, 0}, 0, 0});
+              typename TestFixture::Projectile{{0, 0, 0}, {0, 0, 0}, 0});
 }
 
 TYPED_TEST(ProjectileTest, ConversionPreservesAllFields) {
@@ -68,8 +65,7 @@ TYPED_TEST(ProjectileTest, ConversionPreservesAllFields) {
   using OtherScalar = typename Other::value_type;
   const typename TestFixture::Projectile source{
       TypeParam{0.1, -123.456, 789.123}, TypeParam{-0.2, 456.789, -987.654},
-      typename TestFixture::Scalar(1.23456789),
-      std::numeric_limits<pdef::ProjectileId>::max()};
+      typename TestFixture::Scalar(1.23456789)};
   const auto converted = pdef::projectile_cast<Other>(source);
   for (int axis = 0; axis < 3; ++axis) {
     EXPECT_EQ(converted.position[axis],
@@ -78,7 +74,6 @@ TYPED_TEST(ProjectileTest, ConversionPreservesAllFields) {
               static_cast<OtherScalar>(source.velocity[axis]));
   }
   EXPECT_EQ(converted.lifetime, static_cast<OtherScalar>(source.lifetime));
-  EXPECT_EQ(converted.type, source.type);
 }
 
 TYPED_TEST(ProjectileTest, ZeroTimeLeavesBallisticStateUnchanged) {
@@ -89,7 +84,7 @@ TYPED_TEST(ProjectileTest, ZeroTimeLeavesBallisticStateUnchanged) {
 TYPED_TEST(ProjectileTest, ZeroAccelerationProducesLinearMotion) {
   const auto result = pdef::update_balistic(this->initial, TypeParam{0}, 2);
   expect_same(result,
-              typename TestFixture::Projectile{{9, 12, 15}, {4, 5, 6}, 8, 42});
+              typename TestFixture::Projectile{{9, 12, 15}, {4, 5, 6}, 8});
 }
 
 TYPED_TEST(ProjectileTest, KnownBallisticMotion) {
@@ -99,11 +94,10 @@ TYPED_TEST(ProjectileTest, KnownBallisticMotion) {
   const auto velocity = pdef::make_velocity(this->initial, acceleration, 2);
   EXPECT_EQ(position, (TypeParam{9, -8, 15}));
   EXPECT_EQ(velocity, (TypeParam{4, -15, 6}));
-  expect_same(
-      pdef::update_balistic(this->initial, acceleration, 2),
-      typename TestFixture::Projectile{{9, -8, 15}, {4, -15, 6}, 8, 42});
+  expect_same(pdef::update_balistic(this->initial, acceleration, 2),
+              typename TestFixture::Projectile{{9, -8, 15}, {4, -15, 6}, 8});
   expect_same(this->initial,
-              typename TestFixture::Projectile{{1, 2, 3}, {4, 5, 6}, 10, 42});
+              typename TestFixture::Projectile{{1, 2, 3}, {4, 5, 6}, 10});
 }
 
 TYPED_TEST(ProjectileTest, AccelerationCanAffectEveryAxis) {
@@ -148,7 +142,7 @@ TYPED_TEST(ProjectileTest, CustomZeroGravityProducesLinearMotion) {
   EXPECT_EQ(engine.gravity(), 0);
   ASSERT_EQ(engine.projectiles().size(), 1u);
   expect_same(engine.projectiles()[0],
-              typename TestFixture::Projectile{{9, 12, 15}, {4, 5, 6}, 8, 42});
+              typename TestFixture::Projectile{{9, 12, 15}, {4, 5, 6}, 8});
 }
 
 TYPED_TEST(ProjectileTest, CustomGravityIsUsedOnEveryTick) {
@@ -161,9 +155,8 @@ TYPED_TEST(ProjectileTest, CustomGravityIsUsedOnEveryTick) {
 }
 
 TYPED_TEST(ProjectileTest, ExpiredEntriesStayFrozenAndRetainOrder) {
-  pdef::Projectiles<TypeParam> input{{{1, 2, 3}, {4, 5, 6}, 0, 7},
-                                     {{7, 8, 9}, {1, 2, 3}, -1, 7},
-                                     this->initial};
+  pdef::Projectiles<TypeParam> input{
+      {{1, 2, 3}, {4, 5, 6}, 0}, {{7, 8, 9}, {1, 2, 3}, -1}, this->initial};
   psim::ProjectileEngine<TypeParam> engine(input, 10);
   engine.tick(1);
   engine.tick(1);
@@ -217,7 +210,7 @@ template <pdef::ProjectileVector Vec> void check_accuracy(AccuracyRun run) {
         {Vec{positions(generator), positions(generator), positions(generator)},
          Vec{velocities(generator), velocities(generator),
              velocities(generator)},
-         Scalar(run.seconds + 10), static_cast<pdef::ProjectileId>(i % 3)});
+         Scalar(run.seconds + 10)});
   }
   psim::ProjectileEngine<Vec> engine(initial);
   const Scalar dt = Scalar{1} / Scalar(run.rate);
