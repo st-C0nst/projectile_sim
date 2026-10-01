@@ -9,6 +9,10 @@
 # Generated compilation database
 /compile_commands.json
 
+# Personal notes
+*.md
+*.txt
+
 # Compiled objects and libraries
 *.o
 *.obj
