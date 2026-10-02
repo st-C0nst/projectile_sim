@@ -106,6 +106,51 @@ TYPED_TEST(ProjectileTest, AccelerationCanAffectEveryAxis) {
   expect_ballistic(result, this->initial, {2, -4, 6}, 0.5);
 }
 
+TYPED_TEST(ProjectileTest, EnginePoolHandlesSurviveMovementAndSlotReuse) {
+  psim::ProjectileEngine<TypeParam> engine(2, 10);
+  const auto first = engine.spawn(this->initial);
+  auto second_projectile = this->initial;
+  second_projectile.position = TypeParam{20};
+  const auto second = engine.spawn(second_projectile);
+  ASSERT_TRUE(first);
+  ASSERT_TRUE(second);
+  EXPECT_FALSE(engine.spawn(this->initial));
+
+  engine.tick(0.5);
+  ASSERT_NE(engine.try_get(*second), nullptr);
+  expect_ballistic(*engine.try_get(*second), second_projectile,
+                   {0, -10, 0}, 0.5);
+  EXPECT_TRUE(engine.erase_remove(*first));
+  EXPECT_FALSE(engine.is_alive(*first));
+  EXPECT_EQ(engine.try_get(*first), nullptr);
+  EXPECT_FALSE(engine.erase_remove(*first));
+  ASSERT_NE(engine.try_get(*second), nullptr);
+  expect_ballistic(*engine.try_get(*second), second_projectile,
+                   {0, -10, 0}, 0.5);
+
+  const auto replacement = engine.spawn(this->initial);
+  ASSERT_TRUE(replacement);
+  EXPECT_EQ(replacement->slot_id, first->slot_id);
+  EXPECT_NE(replacement->generation, first->generation);
+  EXPECT_EQ(engine.try_get(*first), nullptr);
+  EXPECT_EQ(engine.size(), 2u);
+}
+
+TYPED_TEST(ProjectileTest, EngineBatchSpawnStopsAtCapacity) {
+  psim::ProjectileEngine<TypeParam> engine(2);
+  pdef::Projectiles<TypeParam> input(3, this->initial);
+  const auto handles = engine.spawn_projectiles(input);
+  ASSERT_EQ(handles.size(), 2u);
+  EXPECT_EQ(engine.projectiles().size(), 2u);
+  for (const auto handle : handles) {
+    ASSERT_NE(engine.try_get(handle), nullptr);
+    expect_same(*engine.try_get(handle), this->initial);
+  }
+  EXPECT_TRUE(engine.spawn_projectiles(input).empty());
+  psim::ProjectileEngine<TypeParam> empty(0);
+  EXPECT_FALSE(empty.spawn(this->initial));
+}
+
 TYPED_TEST(ProjectileTest, EngineCopiesInputAndExposesDefaultGravity) {
   pdef::Projectiles<TypeParam> input{this->initial};
   psim::ProjectileEngine<TypeParam> engine(input);

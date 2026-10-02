@@ -1,8 +1,8 @@
 #pragma once
 
-#include "projectile_group.hpp"
+#include "projectile.hpp"
+#include "projectile_pool.hpp"
 #include <glm/vec3.hpp>
-#include <span>
 
 namespace psim {
 inline constexpr double default_gravity = 9.81;
@@ -12,22 +12,66 @@ public:
   using ScalarType = typename Vec3::value_type;
   using VectorType = Vec3;
 
-  ProjectileEngine() = delete;
+  using Projectile = pdef::BaseProjectile<Vec3>;
+  using ProjectileHandle = ppool::ProjectileHandle;
 
   explicit ProjectileEngine(
-      pdef::Projectiles<Vec3> &projectiles,
+      std::size_t capacity,
       const ScalarType gravity = static_cast<ScalarType>(default_gravity))
-      : projectiles_(projectiles), gravity_(gravity) {};
+      : projectile_pool_(capacity), gravity_(gravity) {}
+
+  explicit ProjectileEngine(
+      const pdef::Projectiles<Vec3> &projectiles,
+      const ScalarType gravity = static_cast<ScalarType>(default_gravity))
+      : ProjectileEngine(projectiles.size(), gravity) {
+    for (const auto &projectile : projectiles) {
+      (void)projectile_pool_.spawn(projectile);
+    }
+  }
 
   explicit ProjectileEngine(ProjectileEngine &&other) noexcept = default;
   ProjectileEngine &operator=(ProjectileEngine &&other) noexcept = default;
 
   // No copying
   ProjectileEngine(const ProjectileEngine &) = delete;
-  ProjectileEngine operator=(const ProjectileEngine &) = delete;
+  ProjectileEngine &operator=(const ProjectileEngine &) = delete;
+
+  [[nodiscard]]
+  std::optional<ProjectileHandle> spawn(Projectile projectile) {
+    return projectile_pool_.spawn(std::move(projectile));
+  }
+
+  [[nodiscard]]
+  std::vector<ProjectileHandle>
+  spawn_projectiles(std::span<const Projectile> projectiles) {
+    return projectile_pool_.spawn_projectiles(projectiles);
+  }
+
+  [[nodiscard]]
+  const Projectile *try_get(ProjectileHandle handle) const {
+    return projectile_pool_.try_get(handle);
+  }
+
+  bool erase_remove(ProjectileHandle handle) {
+    return projectile_pool_.erase_remove(handle);
+  }
+
+  [[nodiscard]]
+  bool is_alive(ProjectileHandle handle) const {
+    return projectile_pool_.is_alive(handle);
+  }
+
+  [[nodiscard]]
+  std::size_t size() const { return projectile_pool_.size(); }
+
+  // Borrowed view; mutations can invalidate pointers and change dense ordering.
+  [[nodiscard]]
+  std::span<const Projectile> projectiles() const noexcept {
+    return projectile_pool_.projectiles();
+  }
 
   void update_projectiles(const ScalarType dt) {
-    for (auto &projectile : projectiles_) {
+    for (auto &projectile : projectile_pool_.projectiles_) {
       if (projectile.lifetime <= 0) {
         continue;
       }
@@ -37,10 +81,6 @@ public:
     }
   }
   void tick(const ScalarType dt) { update_projectiles(dt); }
-  [[nodiscard]]
-  std::span<const pdef::BaseProjectile<Vec3>> projectiles() const {
-    return {projectiles_.data(), projectiles_.size()};
-  }
 
   [[nodiscard]]
   ScalarType gravity() const noexcept {
@@ -48,7 +88,8 @@ public:
   }
 
 private:
-  pdef::Projectiles<Vec3> projectiles_;
+  ppool::ProjectilePool<Vec3> projectile_pool_;
+
   ScalarType gravity_ = default_gravity;
 };
 
